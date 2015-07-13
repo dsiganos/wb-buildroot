@@ -1,0 +1,4 @@
+config BR2_PACKAGE_SDCTS
+	bool "sdcts"
+	help
+		Timespace sdcts application
