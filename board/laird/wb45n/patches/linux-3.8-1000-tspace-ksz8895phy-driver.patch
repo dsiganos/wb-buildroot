@@ -1,0 +1,743 @@
+diff -Naur linux-3.8-original/drivers/net/phy/Kconfig linux-3.8/drivers/net/phy/Kconfig
+--- linux-3.8-original/drivers/net/phy/Kconfig	2013-02-18 23:58:34.000000000 +0000
++++ linux-3.8/drivers/net/phy/Kconfig	2015-07-15 01:34:00.464829500 +0100
+@@ -182,3 +182,38 @@
+ config MICREL_KS8995MA
+ 	tristate "Micrel KS8995MA 5-ports 10/100 managed Ethernet switch"
+ 	depends on SPI
++
++config MICREL_KSZ8895PHY
++	tristate "Driver for Micrel KSZ8895 Switch PHYs"
++	help
++	Supports the KSZ8895, KSZ8864 Switch PHYs.
++	If say Y, select one and only one MIIM bus interface from
++	KSPHY_BUS_MDIO or KSPHY_BUS_SPI.
++
++config KSPHY_FOR_KSZ8864
++	bool "Driver for Micrel KSZ8864 Switch PHYs"
++	depends on MICREL_KSZ8895PHY
++	help
++	Say Y, if the device is KSZ8864 Switch. Say N, if the device is
++	KSZ8895 Switch.
++
++config KSPHY_MULTI_ETH
++	bool "Micrel KSZ8895 is configured for multiple logical Network interface"
++	depends on MICREL_KSZ8895PHY
++    	help
++	Each Switch port is configured for a delegated Network Interface,
++        For examplem "eth0" is communicating with Switch Port 1 and
++        "eth1" is communicating with Switch Port 2.
++
++config KSPHY_BUS_MDIO
++        bool "MDIO bus driver for Micrel KSZ8895 Switch PHYs"
++        depends on MICREL_KSZ8895PHY
++        default y
++        help
++        Access Micrel KSZ8895 Switch PHY device through MDC/MDIO bus.
++
++config KSPHY_BUS_SPI
++        bool "SPI bus driver for Micrel KSZ8895 Switch PHYs"
++        depends on MICREL_KSZ8895PHY && KSPHY_BUS_MDIO = n
++        help
++        Access Micrel KSZ8895 Switch PHY device through SPI bus.
+diff -Naur linux-3.8-original/drivers/net/phy/ksz8895phy.c linux-3.8/drivers/net/phy/ksz8895phy.c
+--- linux-3.8-original/drivers/net/phy/ksz8895phy.c	1970-01-01 01:00:00.000000000 +0100
++++ linux-3.8/drivers/net/phy/ksz8895phy.c	2015-07-15 01:36:58.796307736 +0100
+@@ -0,0 +1,579 @@
++/*
++ * drivers/net/phy/ksz8895phy.c
++ *
++ * Copyright (c) 2010 SAGEMCOM
++ *
++ * Author: Karl Beldan <karl.beldan@sagemcom.com>
++ *
++ * This program is free software; you can redistribute  it and/or modify it
++ * under  the terms of  the GNU General  Public License as published by the
++ * Free Software Foundation;  either version 2 of the  License, or (at your
++ * option) any later version.
++ *
++ * PHY Driver for Micrel KSZ8895 serial switch
++ */
++#include <linux/init.h>
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/version.h>
++#include <linux/ioport.h>
++#include <linux/pci.h>
++#include <linux/phy.h>
++#include <linux/platform_device.h>
++#include <linux/ethtool.h>
++#include <linux/etherdevice.h>
++#include <linux/in.h>
++#include <linux/ip.h>
++#include <linux/if_vlan.h>
++#include <linux/crc32.h>
++#include <linux/net_tstamp.h>
++#include <linux/spi/spi.h>
++#include <linux/i2c.h>
++#include <linux/i2c-dev.h>
++#include <net/ip.h>
++#include <net/ipv6.h>
++#include <net/tcp.h>
++#include "ksz8895phy.h"
++
++
++#define DRV_MDIONAME		"KSZ8895 MII bus"
++
++
++/* point to function for MDIO bus, SPI bus, or I2C bus */
++static struct ksz8895_fns_t *ksz8895_fns;
++
++/* point to function for platform dependent MDIO */
++static struct ksz8895_fns_t *ksz8895_mii_fns;
++
++/* point to function for i/o access on SPI, or I2C bus */
++struct ksz8895_io_fns_t *ksz8895_io_fns;
++
++
++static const char *bus_str[] = {
++    /*  0 */  "unknown_bus",
++    /*  1 */  "mdio_bus",
++    /*  2 */  "spi_bus",
++    ""
++};
++static int bus_type;
++
++int  ks8895_total_phy=KSZ8895_MIM_ETH;
++
++
++static int ksz8895_mii_init( void );
++static int ksz8895_mii_probe(struct platform_device *, struct mii_bus *, u8);
++
++
++static int ksz8895_config_init(struct phy_device *phydev)
++{
++    int val;
++    u32 features;
++
++    printk(KERN_INFO "%s: phydev->phy_id=0x%x, phydev->addr=0x%x \n", __func__, (int)phydev->phy_id, (int)phydev->addr);
++
++    features = SUPPORTED_MII;
++
++    /* Do we support autonegotiation? */
++    val = phy_read(phydev, MII_BMSR);
++
++    if (val < 0) {
++        return val;
++    }
++
++    if (val & BMSR_ANEGCAPABLE)
++        features |= SUPPORTED_Autoneg;
++
++    if (val & BMSR_100FULL)
++        features |= SUPPORTED_100baseT_Full;
++    if (val & BMSR_100HALF)
++        features |= SUPPORTED_100baseT_Half;
++    if (val & BMSR_10FULL)
++        features |= SUPPORTED_10baseT_Full;
++    if (val & BMSR_10HALF)
++        features |= SUPPORTED_10baseT_Half;
++
++    if (val & BMSR_ESTATEN) {
++        val = phy_read(phydev, MII_ESTATUS);
++
++        if (val < 0)
++            return val;
++
++        if (val & ESTATUS_1000_TFULL)
++            features |= SUPPORTED_1000baseT_Full;
++        if (val & ESTATUS_1000_THALF)
++            features |= SUPPORTED_1000baseT_Half;
++    }
++
++    phydev->supported = features;
++    phydev->advertising = features;
++
++    phydev->link = 1;
++    phydev->speed = 100;
++    phydev->duplex = 1;
++
++    return 0;
++}
++
++#if defined (CONFIG_KSPHY_BUS_SPI)
++static int ksz8895_ack_interrupt(struct phy_device *phydev)
++{
++    u8 spi_val;
++    int ret;
++
++
++    ret = ksz8895_io_fns->nread(LinkChangeInterrupt, &spi_val, 1);
++    //printk(KERN_INFO "%s 1: spi_val=0x%x \n", __func__, spi_val);
++    if (ret < 0)
++        return ret;
++
++#if defined (CONFIG_KSPHY_MULTI_ETH)
++    /* The Switch is represented as multiple PHYs
++     */
++    spi_val &= ( 0x10 | (1 << (phydev->addr - 1)) );
++#endif
++    printk(KERN_INFO "%s 2: spi_val=0x%x \n", __func__, spi_val);
++    return ksz8895_io_fns->nwrite(LinkChangeInterrupt, &spi_val, 1);
++}
++
++static int ksz8895_config_intr(struct phy_device *phydev)
++{
++    u8 spi_val=0;
++    int phy_addr, i;
++    int ret;
++
++
++    ret = ksz8895_io_fns->nread(InterruptEnable, &spi_val, 1);
++    printk(KERN_INFO "%s 1: 0x%X=0x%x \n", __func__, (int)InterruptEnable, (int)spi_val);
++    if (ret < 0)
++        return ret;
++
++    if (phydev->interrupts == PHY_INTERRUPT_ENABLED) {
++        for (i=0; i<ks8895_total_phy; i++) {
++            phy_addr = phydev->addr + i;
++            spi_val |= 1 << (phy_addr - 1);
++        }
++    } else {
++        for (i=0; i<ks8895_total_phy; i++) {
++            phy_addr = phydev->addr + i;
++            spi_val &= ~(1 << (phy_addr - 1));
++        }
++    }
++    printk(KERN_INFO "%s 2: 0x%X=0x%x \n", __func__, (int)InterruptEnable, (int)spi_val);
++    return ksz8895_io_fns->nwrite(InterruptEnable, &spi_val, 1);
++}
++
++static int ksz8895_did_interrupt(struct phy_device *phydev)
++{
++    u8 spi_val;
++    int ret;
++
++
++    ret = ksz8895_io_fns->nread(LinkChangeInterrupt, &spi_val, 1);
++    printk(KERN_INFO "%s 1: 0x%X=0x%x \n", __func__, (int)LinkChangeInterrupt, (int)spi_val);
++    if (ret < 0)
++        return ret;
++
++#if !defined (CONFIG_KSPHY_MULTI_ETH)
++
++    /* The Switch is represented as single PHY
++     */
++    if ( (spi_val & KSZ8895_INT_MASK) != 0 )
++        return (1);
++    else
++        return (0);
++#else
++    /* The Switch is represented as multiple PHYs
++     */
++    printk(KERN_INFO "%s: ret=0x%x \n", __func__, spi_val & (1 << (phydev->addr - 1)));
++    return spi_val & (1 << (phydev->addr - 1));
++#endif
++}
++
++#endif /* #if defined (CONFIG_KSPHY_BUS_SPI) */
++
++
++static struct phy_driver ksz8895_phy_driver = {
++    .phy_id         = (KSZ8895_PHYID1 << 16) | KSZ8895_PHYID2,
++    .phy_id_mask    = ~(KSZ8895_ALL_PHY_ADDR << 1),
++    .name           = "Micrel KSZ8895 or KSZ8864",
++    .config_init    = ksz8895_config_init,
++    .features       = PHY_BASIC_FEATURES | SUPPORTED_Pause,
++    .flags          = PHY_HAS_INTERRUPT,
++    .config_aneg    = genphy_config_aneg,
++    .read_status    = genphy_read_status,
++#if defined (CONFIG_KSPHY_BUS_SPI)
++    .ack_interrupt  = ksz8895_ack_interrupt,
++    .config_intr    = ksz8895_config_intr,
++    .did_interrupt  = ksz8895_did_interrupt,
++#endif
++    .driver         = {.owner= THIS_MODULE, },
++};
++
++static int __init ksz8895_phy_init(void)
++{
++    return phy_driver_register(&ksz8895_phy_driver);
++}
++
++static void __exit ksz8895_phy_exit(void)
++{
++    phy_driver_unregister(&ksz8895_phy_driver);
++}
++
++
++/*--------------------------------------------------------------------------*/
++
++
++static int platform_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
++{
++    printk(KERN_INFO "%s: bus=0x%x, phy_id=0x%x, regnum=0x%x\n", __func__,
++           (int)bus, phy_id, regnum);
++    return (0);
++}
++
++static int platform_mdio_write(struct mii_bus *bus, int phy_id, int regnum, u16 val)
++{
++    printk(KERN_INFO "%s: bus=0x%x, phy_id=0x%x, regnum=0x%x, val=0x%x\n", __func__,
++           (int)bus, phy_id, regnum, val);
++    return (0);
++}
++
++
++int ksz8895_mii_read(struct mii_bus *bus, int phy_id, int regnum)
++{
++    int i;
++    int phy_addr;
++    int ret;
++
++    //printk(KERN_INFO "%s: phy_id=%d, regnum=%d \n", __func__, phy_id, regnum);
++
++    /* KSZ8873 doesn't support broadcast PHY address, force it to PHY address 1 */
++    if (phy_id == 0) {
++        for (i=0; i<PHY_MAX_ADDR; i++) {
++            struct phy_device *phydev = bus->phy_map[i];
++            if ((phydev != NULL) && (phydev->bus == bus)) {
++                struct ksz8895_mdio *ks = bus->priv;
++                if (ks) {
++                    phy_id = ks->phy_addr;
++                    break;
++                }
++            }
++        }
++    }
++
++#if !defined (CONFIG_KSPHY_MULTI_ETH)
++    /* The Switch is represented as single PHY
++     */
++
++    if ((regnum == MII_PHYSID1) || (regnum == MII_PHYSID2))
++        return ksz8895_mii_fns->read(bus, phy_id, regnum);
++
++    /* read ALL PHY's link status first */
++    for (i=0; i<ks8895_total_phy; i++) {
++        phy_addr = phy_id + i;
++        printk(KERN_INFO "%s 1: phy_addr=%d \n", __func__, phy_addr);
++        ret = ksz8895_mii_fns->read(bus, phy_addr, MII_BMSR);
++        /* link is up */
++        if ((ret & BMSR_LSTATUS) == BMSR_LSTATUS)
++            break;
++    }
++
++    /* Is it going to read phy link status? */
++    if (regnum == MII_BMSR) {
++        /* Yes, return link down if all the Switch phy are link down,
++           otherwise, linkup */
++        return (ret);
++    } else {
++        /* No, return the PHY register if this PHY is linkup,
++           otherwise, return other PHY register status */
++        return ksz8895_mii_fns->read(bus, phy_addr, regnum);
++    }
++#else
++    /* The Switch is represented as multiple PHYs
++     */
++    //printk(KERN_INFO "%s 1: phy_id=%d \n", __func__, phy_id);
++    return ksz8895_mii_fns->read(bus, phy_id, regnum);
++#endif
++
++}
++
++int ksz8895_mii_write(struct mii_bus *bus, int phy_id, int regnum, u16 val)
++{
++    int phy_addr, i;
++    int ret=0;
++
++    //printk(KERN_INFO "%s: phy_id=%d, regnum=%d, val=0x%x \n", __func__, phy_id, regnum, (int)val);
++
++    for (i=0; i<ks8895_total_phy; i++) {
++        phy_addr = phy_id + i;
++        printk(KERN_INFO "%s: phy_addr=%d \n", __func__, phy_addr);
++        ret = ksz8895_mii_fns->write(bus, phy_addr, regnum, val);
++    }
++
++    return ret;
++}
++
++
++void platform_mac_adjust_link(struct net_device *dev)
++{
++#if defined (CONFIG_NET_PEGASUS)
++    ksz9692_mac_adjust_link(dev);
++#endif
++}
++
++struct phy_device * ksz8895_mii_connect
++(
++    struct platform_device *pdev,
++    struct net_device *dev,
++    u8 phy_addr,
++    phy_interface_t phy_mode
++) {
++    struct mii_bus *mii_bus=NULL;
++    struct phy_device *phydev = NULL;
++    char phy_id[MII_BUS_ID_SIZE];
++    struct ksz8895_mdio *ks;
++    int ret;
++
++    mii_bus = mdiobus_alloc();
++    if (mii_bus==NULL) {
++        printk(KERN_ERR "%s: mdiobus_alloc fail\n", __func__);
++        return NULL;
++    }
++    ks = kzalloc(sizeof(struct ksz8895_mdio), GFP_KERNEL);
++
++    ret = ksz8895_mii_init();
++    if (ret != 0)
++        return (NULL);
++    ret = ksz8895_mii_probe(pdev, mii_bus, phy_addr);
++    if (ret != 0) {
++        if (mii_bus)
++            mdiobus_free(mii_bus);
++        return (NULL);
++    }
++
++    snprintf(phy_id, MII_BUS_ID_SIZE, PHY_ID_FMT, "mdio", phy_addr);
++
++    phydev = phy_connect(dev, phy_id,
++                         platform_mac_adjust_link, 0, phy_mode);
++
++    if (phydev != -1) {
++
++        printk(KERN_INFO "%s: attached PHY driver [%s] (%s:phy_addr=%s, irq=%d)\n",
++               dev->name, phydev->drv->name, bus_str[bus_type],
++               dev_name(&phydev->dev), phydev->irq);
++
++        /* mask with MAC supported features */
++        phydev->supported &= (PHY_BASIC_FEATURES | SUPPORTED_Pause );
++
++        phydev->supported |= (SUPPORTED_Pause);
++
++        phydev->advertising = phydev->supported;
++
++        ks->phy_addr = phy_addr;
++        phydev->bus = mii_bus;
++        mii_bus->phy_map[phy_addr] = phydev;
++        mii_bus->priv = ks;
++
++    } else {
++        printk(KERN_INFO"%s: Could not connect to PHY, make a dummy phy device\n",
++               dev->name);
++
++        /* Make dummy phy device */
++        phydev = kzalloc(sizeof(struct phy_device), GFP_KERNEL);
++        phydev->link = 1;
++        phydev->speed = 100;
++        phydev->duplex = 1;
++    }
++
++    return (phydev);
++}
++
++
++static int ksz8895_mii_probe
++(
++    struct platform_device *pdev,
++    struct mii_bus *mii_bus,
++    u8 phy_addr
++)
++{
++    int *irqlist;
++    int i;
++
++
++    if ((ksz8895_fns->read == NULL) || (ksz8895_fns->write == NULL)) {
++        printk(KERN_ERR "%s: ksz8895_fns not available\n", __func__);
++        return -1;
++    }
++
++#if defined (CONFIG_KSPHY_BUS_MDIO)
++    if ((ksz8895_mii_fns->read == NULL) || (ksz8895_mii_fns->write == NULL)) {
++        printk(KERN_ERR "%s: ksz8895_mii_fns not available\n", __func__);
++        return -1;
++    }
++#endif
++
++#if !defined (CONFIG_KSPHY_BUS_MDIO)
++    if ((ksz8895_io_fns->nread == NULL) || (ksz8895_io_fns->nwrite == NULL) ||
++        (ksz8895_io_fns->init == NULL) || (ksz8895_io_fns->exit == NULL)) {
++        printk(KERN_ERR "%s: ksz8895_io_fns not available\n", __func__);
++        return -1;
++    }
++#endif
++
++    irqlist = kmalloc(sizeof(int) * PHY_MAX_ADDR, GFP_KERNEL);
++    if (!irqlist) {
++        printk(KERN_ERR "%s: Error kmalloc irq\n", __func__);
++        return -1;
++    }
++
++    for (i = 0; i < PHY_MAX_ADDR; ++i)
++        irqlist[i] = PHY_IGNORE_INTERRUPT;
++
++#if defined (CONFIG_KSPHY_BUS_SPI)
++    irqlist[phy_addr] = (int)KSZ8895_IRQ;
++#endif
++
++    mii_bus->name = DRV_MDIONAME;
++    snprintf(mii_bus->id, MII_BUS_ID_SIZE, "mdio");
++    mii_bus->parent   = &pdev->dev;
++    mii_bus->read = ksz8895_fns->read;
++    mii_bus->write = ksz8895_fns->write;
++    mii_bus->irq = irqlist;
++    mii_bus->phy_mask =  ~(KSZ8895_ALL_PHY_ADDR << 1) ;
++    printk(KERN_INFO "%s: mii_bus->phy_mask=0x%x \n", __func__, (int)mii_bus->phy_mask);
++
++    if (mdiobus_register(mii_bus)) {
++        printk(KERN_ERR "%s: Error registering mii bus\n", __func__);
++        return -1;
++    }
++
++    platform_set_drvdata(pdev, mii_bus);
++    printk(KERN_INFO "%s: mii_bus=0x%X\n", __func__, (int)mii_bus);
++
++    return 0;
++}
++
++int ksz8895_mii_init( void )
++{
++    int ret = -1;
++
++
++    /* point to mii bus access function dependent on MDIO, SPI, or I2C bus */
++    ksz8895_fns = kzalloc(sizeof(*ksz8895_fns), GFP_KERNEL);
++    if (!ksz8895_fns) {
++        printk(KERN_ERR "%s:ksz8895_fns memory allocation failed\n", __func__);
++        return -1;
++    }
++
++#if defined (CONFIG_KSPHY_BUS_MDIO)
++
++    /* MIIM by MDIO/MDC bus */
++    bus_type = KSZ8895_MIDO_BUS;
++    ksz8895_fns->read  = ksz8895_mii_read;
++    ksz8895_fns->write = ksz8895_mii_write;
++
++    /* point to MDIO I2C access function dependent on MDIO master */
++    ksz8895_mii_fns = kzalloc(sizeof(*ksz8895_mii_fns), GFP_KERNEL);
++    if (!ksz8895_mii_fns) {
++        printk(KERN_ERR "%s:ksz8895_mii_fns memory allocation failed\n", __func__);
++        return -1;
++    }
++#if defined (CONFIG_NET_PEGASUS)
++    ksz8895_mii_fns->read  = ksz9692_mdio_read;
++    ksz8895_mii_fns->write = ksz9692_mdio_write;
++#else
++    ksz8895_mii_fns->read  = platform_mdio_read;
++    ksz8895_mii_fns->write = platform_mdio_write;
++#endif /* #if defined (CONFIG_NET_PEGASUS) */
++
++#elif defined (CONFIG_KSPHY_BUS_SPI)
++
++    ksz8895_fns->read  = ksz8895_spibus_read;
++    ksz8895_fns->write = ksz8895_spibus_write;
++
++    /* MIIM by SPI bus */
++    /* point to SPI or I2C access function */
++    ksz8895_io_fns = kzalloc(sizeof(*ksz8895_io_fns), GFP_KERNEL);
++    if (!ksz8895_io_fns) {
++        printk(KERN_ERR "%s:ksz8895_io_fns memory allocation failed\n", __func__);
++        return -1;
++    }
++
++    bus_type = KSZ8895_SPI_BUS;
++    ksz8895_io_fns->nread  = ksz8895_spi_nread;
++    ksz8895_io_fns->nwrite = ksz8895_spi_nwrite;
++    ksz8895_io_fns->init   = ksz8895_spibus_mod_init;
++    ksz8895_io_fns->exit   = ksz8895_spibus_mod_exit;
++
++#else /* #if defined (CONFIG_KSPHY_BUS_MDIO) */
++
++    /* unknow interface */
++    bus_type = 0;
++    ksz8895_fns->read  = NULL;
++    ksz8895_fns->write = NULL;
++    printk(KERN_ERR "%s: no mii bus define!\n", __func__);
++    return -1;
++
++#endif /* #if defined (CONFIG_KSPHY_BUS_MDIO)*/
++
++#if !defined (CONFIG_KSPHY_MULTI_ETH)
++    /* The KSZ8895 Switch as a single PHY */
++    ks8895_total_phy = KSZ8895_MAX_ETH;
++#endif
++
++    printk(KERN_INFO "KSZ8895 PHY driver version %s on %s\n",
++           KSZ8895_PHY_VER, bus_str[bus_type]);
++
++    if (bus_type == KSZ8895_SPI_BUS) {
++        u8  chip_id;
++
++        /* init SPI bus mod */
++        ret = ksz8895_io_fns->init();
++        if (ret < 0)
++            return ret;
++
++        /* checking SPI interface */
++        ret = ksz8895_io_fns->nread(ChipID0, &chip_id, 1);
++        if (ret < 0) {
++            printk(KERN_ERR "%s: %s access failed\n", __func__, bus_str[bus_type]);
++            return ret;
++        }
++        if (chip_id != KSZ8895_FAMILY_ID) {
++            printk(KERN_ERR "%s: warning Chip ID0 is not 0x%02x (0x%02x)\n",
++                   __func__, KSZ8895_FAMILY_ID, chip_id);
++            return -1;
++        }
++    }
++    return (0);
++}
++
++void ksz8895_mii_exit( struct platform_device *pdev )
++{
++    struct mii_bus *mii_bus = platform_get_drvdata(pdev);
++
++    if (ksz8895_io_fns->exit)
++        ksz8895_io_fns->exit();
++
++    if (ksz8895_fns)
++        kfree(ksz8895_fns);
++
++    if (ksz8895_mii_fns)
++        kfree(ksz8895_mii_fns);
++
++    if (ksz8895_io_fns)
++        kfree(ksz8895_io_fns);
++
++    if (mii_bus) {
++        mdiobus_unregister(mii_bus);
++        mdiobus_free(mii_bus);
++    }
++}
++
++
++/*--------------------------------------------------------------------------*/
++
++module_init(ksz8895_phy_init);
++module_exit(ksz8895_phy_exit);
++
++MODULE_AUTHOR("karl.beldan@sagemcom.com");
++MODULE_LICENSE("GPL");
++MODULE_DESCRIPTION("Micrel KSZ8895 PHY driver");
+diff -Naur linux-3.8-original/drivers/net/phy/ksz8895phy.h linux-3.8/drivers/net/phy/ksz8895phy.h
+--- linux-3.8-original/drivers/net/phy/ksz8895phy.h	1970-01-01 01:00:00.000000000 +0100
++++ linux-3.8/drivers/net/phy/ksz8895phy.h	2015-07-15 01:36:56.574339156 +0100
+@@ -0,0 +1,114 @@
++/*
++ * drivers/net/phy/ksz8895phy.h
++ *
++ * PHY Driver header file for Micrel KSZ8895 serial switch
++ *
++ * Copyright (c) 2010 SAGEM Communications.
++ *
++ * Author: Karl Beldan <karl.beldan@sagemcom.com>
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ */
++#ifndef KSZ8873PHY_H
++#define KSZ8873PHY_H
++
++#include <linux/mii.h>
++#if defined(CONFIG_ARCH_PEGASUS)
++#include <mach/platform.h>
++#endif
++
++#define KSZ8895_PHY_VER   "1.0.0"
++
++#define KSZ8895_PHY1_ADDR               1
++#define KSZ8895_PHY2_ADDR               2
++#define KSZ8895_PHY3_ADDR               3
++#define KSZ8895_PHY4_ADDR               4
++
++#define KSZ8895_SPI_CMD_READ            0x03
++#define KSZ8895_SPI_CMD_WRITE           0x02
++
++#define KSZ8895_FAMILY_ID               0x95
++#define KSZ8895_PHYID1                  0x0022
++#define KSZ8895_PHYID2                  0x1450
++#define KSZ8895_PORTS_REGS_OFFSET       16
++
++#define KSZ8895_PHY1_DFLT_ADDR          1
++#define KSZ8895_PHY4_DFLT_ADDR          4
++
++#define KSZ8895_MDIO_MIN                MII_BMCR
++#define KSZ8895_MDIO_MAX                MII_LPA
++
++#define KSZ8895_MIDO_BUS                1
++#define KSZ8895_SPI_BUS                 2
++
++
++/* max switch port support logical Network interface */
++#if defined (CONFIG_KSPHY_FOR_KSZ8864)
++#define KSZ8895_INT_MASK                0x0E
++#define KSZ8895_MAX_ETH                 3
++#define KSZ8895_ALL_PHY_ADDR            0xE
++#else
++#define KSZ8895_INT_MASK                0x0f
++#define KSZ8895_MAX_ETH                 4
++#define KSZ8895_ALL_PHY_ADDR            0xF
++#endif
++
++#define KSZ8895_MIM_ETH                 1
++
++#if defined (CONFIG_NET_PEGASUS)
++#define KSZ8895_IRQ                     (LOW_IRQS + KS8692_INT_EXT_INT0)
++#endif
++
++struct ksz8895_mdio {
++    int	phy_addr;
++};
++
++struct ksz8895_fns_t {
++    int (*read)(struct mii_bus *, int, int);
++    int (*write)(struct mii_bus *, int, int, u16);
++};
++
++struct ksz8895_io_fns_t {
++    int (*nread)(u8, u8 *, int);
++    int (*nwrite)(u8, u8 *, int);
++    int (*init)(void);
++    void (*exit)(void);
++};
++extern struct ksz8895_io_fns_t *ksz8895_io_fns;
++
++
++/* enum from sources.blackfin.uclinux.org/net/dsa/ksz8893.h with ksz8863 bits */
++enum switch_reg {
++    /* Global Registers: 0-15 */
++    ChipID0 = 0,
++    ChipID1,
++
++    LinkChangeInterrupt = 124,
++    InterruptEnable,
++
++};
++
++/* Export functions */
++#if defined (CONFIG_NET_PEGASUS)
++extern int ksz9692_mdio_read(struct mii_bus *, int, int);
++extern int ksz9692_mdio_write(struct mii_bus *, int, int, u16);
++extern void ksz9692_mac_adjust_link(struct net_device *);
++#endif
++
++#if defined (CONFIG_KSPHY_BUS_SPI)
++extern inline int ksz8895_spibus_read(struct mii_bus *, int, int);
++extern inline int ksz8895_spibus_write(struct mii_bus *, int, int, u16);
++extern int  ksz8895_spibus_mod_init(void);
++extern void ksz8895_spibus_mod_exit(void);
++
++extern int  ksz8895_spi_nread(u8, u8 *, int);
++extern int  ksz8895_spi_nwrite(u8, u8 *, int);
++
++extern struct spi_device *spi_ksswitch;
++
++#endif
++
++#endif /* KSZ8873PHY_H */
