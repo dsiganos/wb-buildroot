@@ -1,0 +1,21 @@
+diff -Naur linux-3.8-original/drivers/net/phy/phy_device.c linux-3.8/drivers/net/phy/phy_device.c
+--- linux-3.8-original/drivers/net/phy/phy_device.c	2013-02-18 23:58:34.000000000 +0000
++++ linux-3.8/drivers/net/phy/phy_device.c	2015-07-15 01:31:02.571345070 +0100
+@@ -794,6 +794,7 @@
+  */
+ int genphy_update_link(struct phy_device *phydev)
+ {
++#if 0
+ 	int status;
+ 
+ 	/* Do a fake read */
+@@ -812,7 +813,8 @@
+ 		phydev->link = 0;
+ 	else
+ 		phydev->link = 1;
+-
++#endif
++	phydev->link = 1;
+ 	return 0;
+ }
+ EXPORT_SYMBOL(genphy_update_link);
