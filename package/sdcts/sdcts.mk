@@ -1,4 +1,4 @@
-SDCTS_VERSION = master
+SDCTS_VERSION = a4b847a35fe4715b01deaee11420240562ff5047
 SDCTS_SITE = https://github.com/dsiganos/tspace_active_antenna.git
 SDCTS_SITE_METHOD = git
 #SDCTS_SITE_DEPENDENCIES =
