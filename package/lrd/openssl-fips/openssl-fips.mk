@@ -25,7 +25,7 @@ define OPENSSL_FIPS_CONFIGURE_CMDS
 	  export RELEASE=3.8-laird1; \
 	  export SYSTEM=Linux; \
 	  export BUILD=sdc; \
-	  export CROSS_COMPILE=arm-sdc-linux-gnueabi-; \
+	  export CROSS_COMPILE=$(TARGET_CROSS); \
 	  export HOSTCC=gcc; \
 	  ./config \
 	)
