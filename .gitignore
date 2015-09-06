@@ -30,4 +30,5 @@
 !/configs/wb40n_devel_defconfig
 !/configs/wb45n_defconfig
 !/configs/wb45n_devel_defconfig
+!/configs/tspace_active_antenna_defconfig
 # note the above is necessary to avoid customer configs.
