@@ -82,6 +82,11 @@ br_start() {
     $ebtables -t nat -A PREROUTING -i wlan0 -j arpnat --arpnat-target ACCEPT
     # route EAPoL for wireless
     $ebtables -t broute -A BROUTING -i wlan0 --protocol 0x888e -j DROP
+    # Timespace rules
+    ebtables -t broute -A BROUTING -p 0x800 -i eth0 \
+      --ip-dst 255.255.255.255 --ip-proto udp --ip-dport 50000 -j DROP
+    ebtables -t broute -A BROUTING -p 0x800 -i wlan0 \
+      --ip-dst 255.255.255.255 --ip-proto udp --ip-dport 50000 -j DROP
   fi
 
   # prevent bridge ARP packets from interfering with DHCP
