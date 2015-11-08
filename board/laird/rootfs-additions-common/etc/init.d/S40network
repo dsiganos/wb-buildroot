@@ -211,10 +211,6 @@ case $act in
       wls=wait\ $!
     done
     $msg ${alert:+\\\n \ $alert}
-    # tspace gpio setup
-    echo 72 > /sys/class/gpio/export
-    echo 'out' > /sys/devices/ahb.0/apb.1/pinctrl.2/fffff800.gpio/gpio/pioC8/direction
-    echo '0'   > /sys/devices/ahb.0/apb.1/pinctrl.2/fffff800.gpio/gpio/pioC8/value
     ;;
 
   restart)
