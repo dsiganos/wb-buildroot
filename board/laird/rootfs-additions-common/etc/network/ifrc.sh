@@ -843,16 +843,6 @@ case $IFRC_ACTION in
           -e "3cifrc_i:$devalias=$dev $ifrc_Settings" \
           -i $ifrc_Log
 
-      if [ "$dev" != "lo" ] && [ "$devalias" != "wl" ] && ! $phy80211
-      then
-        # ethernet wired phy-hw is external; so try to determine if really there
-        # the generic phy driver is present when phy-hw is otherwise unsupported
-        if grep -s Generic /sys/class/net/$dev/*/uevent >/dev/stderr
-        then
-          msg "Warning: unknown '$dev' iface-phy-hw ...using generic phy driver"
-          [ -z "$mii" ] && exit 1 || $mii $dev |grep -B12 fault && exit 2
-        fi
-      fi
       test -z "$ifnl_s" \
         && ifrc_stop_netlink_daemon
 
