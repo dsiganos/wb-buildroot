@@ -10,4 +10,7 @@ echo "Timespace Active Antenna $ver" > $TARGETDIR/etc/timespace-release
 rm -f $TARGETDIR/etc/init.d/S??lighttpd
 rm -f $TARGETDIR/usr/sbin/lighty
 
+# remove the inetd init script
+rm -f $TARGETDIR/etc/init.d/S??inetd
+
 echo "active antenna POST BUILD script: done."
