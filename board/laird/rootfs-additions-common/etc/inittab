@@ -26,7 +26,7 @@ null::sysinit:/usr/sbin/sdcts -d -V 7
 ::sysinit:/etc/init.d/rcS
 
 # Put a getty on the first serial port and invoke login
-ttyS0::respawn:/sbin/getty -L ttyS0 115200 vt100
+#ttyS0::respawn:/sbin/getty -L ttyS0 115200 vt100
 
 # Stuff to do for the 3-finger salute
 ::ctrlaltdel:/sbin/reboot
