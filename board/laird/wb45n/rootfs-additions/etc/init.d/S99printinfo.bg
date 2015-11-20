@@ -1,0 +1,22 @@
+#!/bin/sh
+
+getmac() {
+    while true; do
+        addr=""
+        addr=`cat "/sys/class/net/$1/address" 2> /dev/null`
+        if [ -n "$addr" ]; then
+            echo $addr
+            return
+        fi
+        sleep 2
+    done
+}
+
+mode=''
+wlan0mac=`getmac wlan0`
+eth0mac=`getmac eth0`
+rel=`cat /etc/timespace-release`
+mode=`cat /etc/timespace-mode 2>/dev/null`
+
+printf "\nMAC addr of wlan0 is: %s\nMAC addr of eth0  is: %s\n%s\nMode: %s\n" \
+    "$wlan0mac" "$eth0mac" "$rel" "$mode" > /dev/console
