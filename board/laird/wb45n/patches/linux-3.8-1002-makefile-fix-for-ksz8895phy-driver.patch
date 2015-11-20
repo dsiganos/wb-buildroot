@@ -1,0 +1,11 @@
+diff -Naur linux-3.8/drivers/net/phy/Makefile linux-3.8.copy/drivers/net/phy/Makefile
+--- linux-3.8/drivers/net/phy/Makefile	2013-02-18 23:58:34.000000000 +0000
++++ linux-3.8.copy/drivers/net/phy/Makefile	2015-11-20 00:59:30.850069607 +0000
+@@ -25,6 +25,7 @@
+ obj-$(CONFIG_MICREL_PHY)	+= micrel.o
+ obj-$(CONFIG_MDIO_OCTEON)	+= mdio-octeon.o
+ obj-$(CONFIG_MICREL_KS8995MA)	+= spi_ks8995.o
++obj-$(CONFIG_MICREL_KSZ8895PHY)	+= ksz8895phy.o
+ obj-$(CONFIG_AT803X_PHY)	+= at803x.o
+ obj-$(CONFIG_AMD_PHY)		+= amd.o
+ obj-$(CONFIG_MDIO_BUS_MUX)	+= mdio-mux.o
