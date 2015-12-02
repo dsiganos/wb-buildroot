@@ -13,4 +13,7 @@ rm -f $TARGETDIR/usr/sbin/lighty
 # remove the inetd init script
 rm -f $TARGETDIR/etc/init.d/S??inetd
 
+# install health monitor
+cp board/timespace/active_antenna/health_monitor.sh $TARGETDIR/usr/sbin/
+
 echo "active antenna POST BUILD script: done."
