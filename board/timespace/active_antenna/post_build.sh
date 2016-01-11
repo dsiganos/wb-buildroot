@@ -24,4 +24,7 @@ cp board/timespace/active_antenna/health_monitor.sh $TARGETDIR/usr/sbin/
 # create /sbin/wireless symlink
 (cd $TARGETDIR/sbin && ln -sf /etc/network/wireless.sh wireless)
 
+# create /var/dhcp symlink
+ln -sfT ../../tmp $TARGETDIR/var/lib/dhcp
+
 echo "active antenna POST BUILD script: done."
