@@ -21,4 +21,7 @@ rm -f $TARGETDIR/etc/init.d/S??bluetooth
 # install health monitor
 cp board/timespace/active_antenna/health_monitor.sh $TARGETDIR/usr/sbin/
 
+# create /sbin/wireless symlink
+(cd $TARGETDIR/sbin && ln -sf /etc/network/wireless.sh wireless)
+
 echo "active antenna POST BUILD script: done."
