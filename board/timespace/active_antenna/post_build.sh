@@ -1,3 +1,5 @@
+set -x
+
 TARGETDIR=$1
 
 echo "active antenna POST BUILD script: starting..."
