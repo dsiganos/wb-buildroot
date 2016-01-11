@@ -27,7 +27,7 @@
 #
 
 # policy routing
-allow-multipath
+# allow-multipath
 
 
 ## Localhost
