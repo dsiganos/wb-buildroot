@@ -25,7 +25,7 @@ WIFI_KMPATH=/lib/modules/`uname -r`/kernel/drivers/net/wireless
 #WIFI_NVRAM=/lib/nvram/nv
 
 WIFI_PROFILES=/etc/summit/profiles.conf       ## sdc_cli profiles.conf
-WIFI_MACADDR=/etc/summit/wifi_interface       ## persistent mac-address file
+WIFI_MACADDR=/tmp/wifi_interface              ## persistent mac-address file
 
 ## monitor, supplicant and cli - comment out to disable . . .
 EVENT_MON=/usr/bin/event_mon
