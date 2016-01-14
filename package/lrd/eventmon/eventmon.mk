@@ -16,6 +16,8 @@ else
 	EVENTMON_DEPENDENCIES = sdcsdk
 endif
 
+EVENTMON_DEPENDENCIES += libnl
+
 EVENTMON_MAKE_ENV = CC="$(TARGET_CC)" \
                     CXX="$(TARGET_CXX)" \
                     ARCH="$(KERNEL_ARCH)" \
