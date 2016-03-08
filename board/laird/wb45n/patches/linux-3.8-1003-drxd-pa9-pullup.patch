@@ -1,0 +1,24 @@
+diff -Naur a/arch/arm/boot/dts/at91sam9x5.dtsi b/arch/arm/boot/dts/at91sam9x5.dtsi
+--- a/arch/arm/boot/dts/at91sam9x5.dtsi	2016-03-07 20:49:53.350420245 +0000
++++ b/arch/arm/boot/dts/at91sam9x5.dtsi	2016-03-07 17:57:46.915815985 +0000
+@@ -122,7 +122,7 @@
+ 				dbgu {
+ 					pinctrl_dbgu: dbgu-0 {
+ 						atmel,pins =
+-							<0 9 0x1 0x0	/* PA9 periph A */
++							<0 9 0x1 0x1	/* PA9 periph A with pullup */
+ 							 0 10 0x1 0x1>;	/* PA10 periph A with pullup */
+ 					};
+ 				};
+diff -Naur a/Makefile b/Makefile
+--- a/Makefile	2016-03-07 20:49:53.476419067 +0000
++++ b/Makefile	2016-03-08 00:20:16.615394891 +0000
+@@ -1,7 +1,7 @@
+ VERSION = 3
+ PATCHLEVEL = 8
+ SUBLEVEL = 0
+-EXTRAVERSION = -laird27.03
++EXTRAVERSION = -laird27.03-tspace1
+ NAME = Unicycling Gorilla
+ 
+ # *DOCUMENTATION*

@@ -1,0 +1,24 @@
+diff -Naur a/arch/arm/cpu/arm926ejs/at91/at91sam9x5_devices.c b/arch/arm/cpu/arm926ejs/at91/at91sam9x5_devices.c
+--- a/arch/arm/cpu/arm926ejs/at91/at91sam9x5_devices.c	2012-12-14 21:43:22.000000000 +0000
++++ b/arch/arm/cpu/arm926ejs/at91/at91sam9x5_devices.c	2016-03-07 16:55:05.120883437 +0000
+@@ -82,7 +82,7 @@
+ {
+ 	at91_pmc_t *pmc = (at91_pmc_t *) ATMEL_BASE_PMC;
+ 
+-	at91_set_a_periph(AT91_PIO_PORTA, 9, 0);	/* DRXD */
++	at91_set_a_periph(AT91_PIO_PORTA, 9, 1);	/* DRXD */
+ 	at91_set_a_periph(AT91_PIO_PORTA, 10, 1);	/* DTXD */
+ 
+ 	writel(1 << ATMEL_ID_SYS, &pmc->pcer);
+diff -Naur a/Makefile b/Makefile
+--- a/Makefile	2016-03-08 00:00:21.676356768 +0000
++++ b/Makefile	2016-03-08 00:16:45.578329882 +0000
+@@ -24,7 +24,7 @@
+ VERSION = 2013
+ PATCHLEVEL = 01
+ SUBLEVEL =
+-EXTRAVERSION = -laird2
++EXTRAVERSION = -laird2-tspace1
+ ifneq "$(SUBLEVEL)" ""
+ U_BOOT_VERSION = $(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
+ else
