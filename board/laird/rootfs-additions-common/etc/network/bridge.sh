@@ -70,6 +70,8 @@ br_start() {
   echo Installing L2 bridging rules.
   # flush bridging rules
   $ebtables -t broute -F
+  ebtables -t broute -A BROUTING -p 0x800 -i eth0 \
+      --ip-dst 255.255.255.255 --ip-proto udp --ip-dport 50000 -j DROP
   $ebtables -t nat -F
   $ebtables -F
   if $phy80211
@@ -83,8 +85,6 @@ br_start() {
     # route EAPoL for wireless
     $ebtables -t broute -A BROUTING -i wlan0 --protocol 0x888e -j DROP
     # Timespace rules
-    ebtables -t broute -A BROUTING -p 0x800 -i eth0 \
-      --ip-dst 255.255.255.255 --ip-proto udp --ip-dport 50000 -j DROP
     ebtables -t broute -A BROUTING -p 0x800 -i wlan0 \
       --ip-dst 255.255.255.255 --ip-proto udp --ip-dport 50000 -j DROP
   fi
