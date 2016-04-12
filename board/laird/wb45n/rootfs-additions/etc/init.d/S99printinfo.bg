@@ -21,6 +21,12 @@ printinfo() {
 
     printf "\nMAC addr of wlan0 is: %s\nMAC addr of eth0  is: %s\n%s\nMode: %s\n" \
         "$wlan0mac" "$eth0mac" "$rel" "$mode" > /dev/console
+
+    echo
+
+    # print md5 hashes of the important partitions
+    # this is used to test that they are not changing
+    print_flash_hashes.sh
 }
 
 case $1 in

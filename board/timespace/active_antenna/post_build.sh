@@ -18,8 +18,9 @@ rm -f $TARGETDIR/etc/init.d/S??inetd
 # remove the bluetooth init script
 rm -f $TARGETDIR/etc/init.d/S??bluetooth
 
-# install health monitor
+# install scripts
 cp board/timespace/active_antenna/health_monitor.sh $TARGETDIR/usr/sbin/
+cp board/timespace/active_antenna/print_flash_hashes.sh $TARGETDIR/usr/sbin/
 
 # create /sbin/wireless symlink
 (cd $TARGETDIR/sbin && ln -sf /etc/network/wireless.sh wireless)
