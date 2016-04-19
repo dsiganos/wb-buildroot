@@ -6,7 +6,8 @@ echo "active antenna POST BUILD script: starting..."
 
 regexp='s/^AC_INIT(\[sdcts\], \[\(.*\)\])[ \t]*$/\1/p'
 ver=`sed -n -e "$regexp" ../../sdcts/configure.ac`
-echo "Timespace Active Antenna $ver" > $TARGETDIR/etc/timespace-release
+state=`git describe --dirty --always | sed 's/tspace_active_antenna-//'`
+echo "Timespace Active Antenna ${state}" > $TARGETDIR/etc/timespace-release
 
 # remove the web server init scripts
 rm -f $TARGETDIR/etc/init.d/S??lighttpd
