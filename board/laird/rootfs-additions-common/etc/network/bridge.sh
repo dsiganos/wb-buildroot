@@ -74,8 +74,8 @@ br_start() {
       --ip-dst 255.255.255.255 --ip-proto udp --ip-dport 50000 -j DROP
   $ebtables -t nat -F
   $ebtables -F
-  if $phy80211
-  then
+  #if $phy80211
+  #then
     # wait n deciseconds for wireless setup to complete
     n=27; while [ -d /tmp/wifi^ ] && let n--; do usleep 98765; done
 
@@ -87,7 +87,7 @@ br_start() {
     # Timespace rules
     ebtables -t broute -A BROUTING -p 0x800 -i wlan0 \
       --ip-dst 255.255.255.255 --ip-proto udp --ip-dport 50000 -j DROP
-  fi
+  #fi
 
   # prevent bridge ARP packets from interfering with DHCP
   $ebtables -A FORWARD -i any --protocol 0x0806 --arp-mac-src $braddr -j DROP
@@ -152,6 +152,7 @@ br_status() {
 }
 
 bridge_ports_check() {
+  phy80211=false
   # check/start each port
   for dev in $bridge_ports
   do
@@ -163,7 +164,7 @@ bridge_ports_check() {
     || { echo \ \ device n/a: $dev; exit 1; }
     then
       # check if port is wireless device
-      [ -d /sys/class/net/$dev/phy80211 ] && phy80211=true || phy80211=false
+      [ -d /sys/class/net/$dev/phy80211 ] && phy80211=true
 
       if [ ! -d /sys/devices/virtual/net/$bridge_iface/brif/$dev ]
       then
