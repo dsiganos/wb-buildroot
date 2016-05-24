@@ -1,0 +1,3 @@
+#AT91BOOTSTRAP3_OVERRIDE_SRCDIR = ../../at91bootstrap3
+UBOOT_OVERRIDE_SRCDIR = ../../u-boot
+#LINUX_OVERRIDE_SRCDIR = ../../kernel
