@@ -39,4 +39,10 @@ ssh-keygen -f $TARGETDIR/etc/ssh/ssh_host_dsa_key -N '' -t rsa
 grep -- '^null::respawn:/usr/sbin/sshd -D' $TARGETDIR/etc/inittab || \
     echo 'null::respawn:/usr/sbin/sshd -D' >> $TARGETDIR/etc/inittab
 
+# show syslogs on console
+echo -e '#!/bin/sh\nlogread -f > /dev/console' > $TARGETDIR/showlogs
+chmod a+x $TARGETDIR/showlogs
+grep -- '^null::respawn:/showlogs' $TARGETDIR/etc/inittab || \
+    echo 'null::respawn:/showlogs' >> $TARGETDIR/etc/inittab
+
 echo "active antenna POST BUILD script: done."
