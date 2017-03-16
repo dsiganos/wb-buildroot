@@ -45,4 +45,8 @@ chmod a+x $TARGETDIR/showlogs
 grep -- '^null::respawn:/showlogs' $TARGETDIR/etc/inittab || \
     echo 'null::respawn:/showlogs' >> $TARGETDIR/etc/inittab
 
+# enable read/write root file system
+grep -- '^null::sysinit:/bin/mount -o remount,rw /' $TARGETDIR/etc/inittab || \
+    echo 'null::sysinit:/bin/mount -o remount,rw /' >> $TARGETDIR/etc/inittab
+
 echo "active antenna POST BUILD script: done."
