@@ -30,4 +30,13 @@ cp board/timespace/active_antenna/print_flash_hashes.sh $TARGETDIR/usr/sbin/
 # create /var/dhcp symlink
 ln -sfT ../../tmp $TARGETDIR/var/lib/dhcp
 
+# enable ssh
+(cd $TARGETDIR/root && mkdir -p .ssh && chmod 700 .ssh && cd .ssh)
+cp ../../scripts/test/tspace_id_rsa.pub $TARGETDIR/root/.ssh/authorized_keys && \
+    chmod 600 $TARGETDIR/root/.ssh/authorized_keys
+rm -f $TARGETDIR/etc/ssh/ssh_host_dsa_key
+ssh-keygen -f $TARGETDIR/etc/ssh/ssh_host_dsa_key -N '' -t rsa
+grep -- '^null::respawn:/usr/sbin/sshd -D' $TARGETDIR/etc/inittab || \
+    echo 'null::respawn:/usr/sbin/sshd -D' >> $TARGETDIR/etc/inittab
+
 echo "active antenna POST BUILD script: done."
